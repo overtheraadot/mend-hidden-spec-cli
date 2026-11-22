@@ -664,6 +664,20 @@ function v4aUpdateEdit(path: string, moveTo: string | null, chunks: VChunk[], st
   };
 }
 
+// Collect one V4A section's lines (with their 1-based line numbers), stopping
+// before the next section start or the End Patch line. Blank lines at the end
+// of a section are not part of it (SPEC.md section 8), so they are dropped.
+function collectV4aSection(lines: string[], start: number, end: number): { sec: { text: string; no: number }[]; next: number } {
+  const sec: { text: string; no: number }[] = [];
+  let i = start;
+  while (i < end && !isV4aSectionStart(lines[i]!)) {
+    sec.push({ text: lines[i]!, no: i + 1 });
+    i += 1;
+  }
+  while (sec.length > 0 && blank(sec[sec.length - 1]!.text)) sec.pop();
+  return { sec, next: i };
+}
+
 function v4aEdits(lines: string[], strict: boolean): Edit[] {
   const first = lines.findIndex((l) => !blank(l));
   if (first < 0) throw new Exit2('error: parse 1');
@@ -683,13 +697,8 @@ function v4aEdits(lines: string[], strict: boolean): Edit[] {
     let m = /^\*\*\* Add File: (.*)$/.exec(line);
     if (m !== null) {
       const path = m[1]!.trim();
-      const sec: { text: string; no: number }[] = [];
-      i += 1;
-      while (i < end && !isV4aSectionStart(lines[i]!)) {
-        sec.push({ text: lines[i]!, no: i + 1 });
-        i += 1;
-      }
-      while (sec.length > 0 && blank(sec[sec.length - 1]!.text)) sec.pop();
+      const { sec, next } = collectV4aSection(lines, i + 1, end);
+      i = next;
       const content: string[] = [];
       for (const s of sec) {
         if (s.text === '') content.push('');
@@ -702,13 +711,8 @@ function v4aEdits(lines: string[], strict: boolean): Edit[] {
     m = /^\*\*\* Delete File: (.*)$/.exec(line);
     if (m !== null) {
       const path = m[1]!.trim();
-      const sec: { text: string; no: number }[] = [];
-      i += 1;
-      while (i < end && !isV4aSectionStart(lines[i]!)) {
-        sec.push({ text: lines[i]!, no: i + 1 });
-        i += 1;
-      }
-      while (sec.length > 0 && blank(sec[sec.length - 1]!.text)) sec.pop();
+      const { sec, next } = collectV4aSection(lines, i + 1, end);
+      i = next;
       for (const s of sec) {
         if (!blank(s.text)) throw new Exit2(`error: parse ${s.no}`);
       }
@@ -719,13 +723,8 @@ function v4aEdits(lines: string[], strict: boolean): Edit[] {
     if (m !== null) {
       const path = m[1]!.trim();
       const updateNo = i + 1;
-      const sec: { text: string; no: number }[] = [];
-      i += 1;
-      while (i < end && !isV4aSectionStart(lines[i]!)) {
-        sec.push({ text: lines[i]!, no: i + 1 });
-        i += 1;
-      }
-      while (sec.length > 0 && blank(sec[sec.length - 1]!.text)) sec.pop();
+      const { sec, next } = collectV4aSection(lines, i + 1, end);
+      i = next;
       let moveTo: string | null = null;
       const chunks: VChunk[] = [];
       let cur: VChunk | null = null;
